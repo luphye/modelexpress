@@ -371,6 +371,13 @@ def build_sglang_source_identity(model_config: ModelConfig) -> p2p_pb2.SourceIde
     except Exception:
         mx_version = "0.0.0"
 
+    import os
+    extra = {}
+    if svc := os.environ.get("SGLANG_SRV_NAME_4_MX"):
+        extra["kws_service_name"] = svc
+    if pd_role := os.environ.get("SGLANG_PD_ROLE_4_MX"):
+        extra["sglang_pd_role"] = pd_role
+
     return p2p_pb2.SourceIdentity(
         mx_version=mx_version,
         mx_source_type=p2p_pb2.MX_SOURCE_TYPE_WEIGHTS,
@@ -388,6 +395,7 @@ def build_sglang_source_identity(model_config: ModelConfig) -> p2p_pb2.SourceIde
         dtype=_get_dtype(model_config),
         quantization=_get_quantization(model_config),
         revision=_get_revision(model_config),
+        extra_parameters=extra,
     )
 
 
