@@ -205,6 +205,19 @@ class MxModelLoader:
         validate_load_strategy_chain()
 
     def _run_load_strategy_chain(self, model: nn.Module, ctx: LoadContext) -> nn.Module:
+        if ctx.is_reload:
+            # A reload must preserve tensor identity (stable virtual addresses
+            # for CUDA graphs and TMS-resumed pages). Only RDMA satisfies this:
+            # it writes source-published, already-post-processed weights into
+            # the existing data_ptrs by name. Every other strategy either
+            # rebuilds the model (reinit_for_retry) or re-runs the engine's
+            # post-processing against already-post-processed weights, which is
+            # not re-entrant. Both corrupt the reload, so here the chain is
+            # RDMA-or-fail and the caller rolls back to the offloaded state.
+            from ...load_strategy import execute_load_strategies
+            from ...load_strategy.rdma_strategy import RdmaStrategy
+
+            return execute_load_strategies(model, ctx, [RdmaStrategy()])
         return run_load_strategy_chain(model, ctx)
 
     def _load_model_via_nixl(
@@ -222,6 +235,18 @@ class MxModelLoader:
         )
         is_draft = is_sglang_draft_model(model_config)
         ctx.p2p_role = "draft" if is_draft else "main"
+        # SGLang always hands in an initialized model, so "model is not None"
+        # cannot separate a reload from a cold load the way it does for vLLM.
+        # A retained context is the equivalent signal: it is assigned only
+        # after a main load succeeded, and a refill reuses this same loader.
+        ctx.is_reload = self._ctx is not None and not is_draft
+        if ctx.is_reload:
+            # Snapshot the weights the model holds right now. An RDMA reload
+            # skips the target-side post-processing, which is only correct
+            # when restoring these same weights, so RdmaStrategy gates the
+            # transfer on this identity.
+            ctx.loaded_identity = p2p_pb2.SourceIdentity()
+            ctx.loaded_identity.CopyFrom(self._ctx.identity)
         draft_gate: _DraftPublicationGate | None = None
         strict_draft = False
         if is_draft:
