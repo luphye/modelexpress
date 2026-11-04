@@ -896,7 +896,9 @@ def draft_tensor_namespace(
     model_uri: str,
 ) -> str | None:
     """Isolate draft manifests without changing the main SourceIdentity."""
-    if not identity.revision or not sglang_version:
+    # if not identity.revision or not sglang_version:
+    # [kext edit]: draft no need revision
+    if not sglang_version:
         return None
     signature = json.dumps(
         {
