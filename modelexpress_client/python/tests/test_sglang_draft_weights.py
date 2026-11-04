@@ -460,21 +460,23 @@ def test_draft_namespace_changes_with_revision_or_sglang_version():
     )
 
 
-def test_draft_namespace_requires_explicit_revision_and_engine_version():
+def test_draft_namespace_accepts_empty_revision_but_requires_engine_version():
+    # Fork behavior: an empty SourceIdentity.revision no longer disables the
+    # draft namespace (internal checkpoints are deployed at immutable paths);
+    # only a missing engine version does.
     identity = p2p_pb2.SourceIdentity(model_name="org/qwen")
     main = draft_weight_adapter_for("Qwen3_5ForCausalLM", role="main")
     selector = Qwen3_5ForCausalLMMTPWeightRule()
-    assert (
-        draft_tensor_namespace(
-            identity,
-            main,
-            selector,
-            "Qwen3_5ForCausalLMMTP",
-            "0.5.16",
-            "s3://bucket/qwen",
-        )
-        is None
+    namespace = draft_tensor_namespace(
+        identity,
+        main,
+        selector,
+        "Qwen3_5ForCausalLMMTP",
+        "0.5.16",
+        "s3://bucket/qwen",
     )
+    assert namespace is not None
+    assert namespace.startswith("mx_draft::") and namespace.endswith("::")
     identity.revision = "rev-a"
     assert (
         draft_tensor_namespace(
