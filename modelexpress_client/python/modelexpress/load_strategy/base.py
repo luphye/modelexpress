@@ -335,6 +335,13 @@ def register_tensors(
                 # agent the main load already bound.
                 ctx.nixl_manager = ctx.shared_nixl_manager
             else:
+                # Auto-pick the base port here, at the site that binds it, so
+                # the free-port probe and the actual bind stay adjacent in
+                # time (a pick made at engine start would sit unclaimed for
+                # the minutes the engine spends before loading weights).
+                from ..ports import ensure_client_port_block
+                ensure_client_port_block("MX_METADATA_PORT")
+
                 base_port = envs.MX_METADATA_PORT
                 listen_port = base_port + ctx.device_id
                 ctx.nixl_manager = _init_nixl_manager(

@@ -797,6 +797,10 @@ def _ensure_nixl_manager(
     if ctx.nixl_manager is not None:
         return
     try:
+        # Auto-pick the base port here, at the site that binds it, so the
+        # free-port probe and the actual bind stay adjacent in time.
+        from ..ports import ensure_client_port_block
+        ensure_client_port_block("MX_METADATA_PORT")
         ctx.nixl_manager = _init_nixl_manager(
             ctx.global_rank,
             ctx.device_id,

@@ -118,6 +118,11 @@ def publish_metadata_and_ready(
 
         host = _get_worker_host()
 
+        # Auto-pick the base port here, at the site that binds it, so the
+        # free-port probe and the actual bind stay adjacent in time (the
+        # NIXL listener above was bound much earlier in the load).
+        from ..ports import ensure_client_port_block
+        ensure_client_port_block("MX_WORKER_GRPC_PORT")
         worker_grpc_port = envs.MX_WORKER_GRPC_PORT + device_id
 
         grpc_server = WorkerGrpcServer(
