@@ -14,6 +14,9 @@ class TensorDescriptor:
     size: int
     device_id: int
     dtype: str
+    # Fingerprint of the published bytes; empty means the source did not
+    # publish one, which is distinct from "verified".
+    checksum: str = ""
 
 
 @dataclass

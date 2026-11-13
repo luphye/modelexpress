@@ -158,11 +158,15 @@ Use a central backend for mixed revisions, live updates, or per-worker addressab
 | MX_POOL_REG | 1 (0 with MX_VMM_ARENA=1) | Register each CUDA allocation once instead of each tensor |
 | MX_VMM_ARENA | 0 | Allocate load-time weights in a CUDA VMM arena for range registration |
 | MX_ARENA_SINGLE_MR | 0 | Keep a single arena memory registration across multiple handles when the transport supports it |
+| MX_PUBLISH_CHECKSUM | 1 | Publish a per-tensor safe_checksum digest on every TensorDescriptor so receivers can verify the installed bytes |
+| MX_VERIFY_CHECKSUM | 1 | After an RDMA receive, recompute digests and compare; a mismatch fails the transfer and names the tensors |
 | UCX_CUDA_COPY_REG_WHOLE_ALLOC | UCX default | UCX CUDA-copy registration behavior; relevant to older UCX VMM combinations |
 | NIXL_LOG_LEVEL | runtime default | NIXL logging level |
 | UCX_LOG_LEVEL | runtime default | UCX logging level |
 
 MX_POOL_REG and MX_VMM_ARENA are alternative registration optimizations. Pool registration is on unless MX_POOL_REG=0 or MX_VMM_ARENA=1 is set without MX_POOL_REG; qualify the chosen combination on the exact GPU, driver, NIXL, and UCX stack. Pool registration registers the CUDA allocation containing each tensor; a tensor spanning several mappings (PyTorch expandable segments, a VA reservation) is rejected at registration and the worker continues without P2P serving. Serving such a tensor needs its own allocation and registration design; MX_POOL_REG=0 does not support it. The older `MX_VMM_ARENA_BYTES` and `MX_VMM_ARENA_CHUNK_BYTES` settings are ignored apart from a deprecation warning.
+
+MX_PUBLISH_CHECKSUM and MX_VERIFY_CHECKSUM verify the landed bytes against what the source published — RDMA completion alone proves the wire delivered, not that the bytes are correct. Both default on; set to `0` when benchmarking load time in isolation. A receiver whose source published no digests logs a warning and skips.
 
 ## ModelStreamer and local-load tuning
 
