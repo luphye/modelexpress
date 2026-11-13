@@ -28,6 +28,7 @@ from . import envs
 from . import ucx_utils
 from .metrics import metrics as transfer_metrics
 from ._nixl import load_nixl_api
+from .tensor_utils import safe_checksum
 from .accelerators import (
     AcceleratorBackend,
     CudaAcceleratorBackend,
@@ -860,6 +861,42 @@ class NixlTransferManager:
 
         return sorted(seen.items())
 
+    def _verify_received_checksums(
+        self,
+        source_tensors: list[TensorDescriptor],
+        local_tensors: dict[str, torch.Tensor],
+    ) -> None:
+        """Recompute safe_checksum on received bytes and compare.
+
+        Tensors whose source descriptor had no digest (source opted out, a
+        pre-checksum client, or a metadata hop stripped the field) do not
+        participate: warn once and skip rather than fail a transfer that had
+        nothing to compare against. A mismatch raises the same error type as
+        a manifest mismatch so the loader retries the next source candidate.
+        """
+        expected = {t.name: t.checksum for t in source_tensors if t.checksum}
+        if not expected:
+            logger.warning(
+                "MX_VERIFY_CHECKSUM on but source published no digests; skipping"
+            )
+            return
+        mismatches = [
+            name
+            for name, digest in expected.items()
+            if (local := local_tensors.get(name)) is not None
+            and local.numel() > 0
+            and safe_checksum(local) != digest
+        ]
+        if mismatches:
+            transfer_metrics.record_nixl_receive("rejected")
+            raise ManifestMismatchError(
+                f"Received-bytes checksum mismatch on {len(mismatches)} of "
+                f"{len(expected)} published tensors (first: {mismatches[:5]}). "
+                f"The RDMA transfer completed but the installed bytes differ "
+                f"from what the source published"
+            )
+        logger.info("Verified %d tensors against source checksums", len(expected))
+
     def _wait_for_xfers(
         self,
         handles: list,
@@ -1269,6 +1306,11 @@ class NixlTransferManager:
         # CRITICAL: Synchronize the device to ensure RDMA writes are visible.
         # GPUDirect RDMA writes bypass torch streams, so we must sync.
         self._accelerator_backend.synchronize(self._device_id)
+
+        # Default-on (MX_VERIFY_CHECKSUM=0 opts out): confirm the landed
+        # bytes match what the source published, beyond transport completion.
+        if envs.MX_VERIFY_CHECKSUM:
+            self._verify_received_checksums(source_tensors, local_tensors)
 
         duration = time.perf_counter() - start_time
         bandwidth_gbps = (total_bytes * 8) / (duration * 1e9) if duration > 0 else 0.0

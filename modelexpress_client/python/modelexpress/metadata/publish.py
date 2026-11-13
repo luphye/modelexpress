@@ -18,6 +18,7 @@ from .publisher import PublisherThread
 from .payload import tensor_source_metadata
 from ..client import MxClient
 from .. import p2p_pb2
+from ..tensor_utils import safe_checksum
 
 if TYPE_CHECKING:
     from ..nixl_transfer import NixlTransferManager
@@ -60,18 +61,27 @@ def build_tensor_protos(
     device_id: int,
     global_rank: int,
 ) -> list["p2p_pb2.TensorDescriptor"]:
-    """Build per-tensor descriptor protos from registered tensors."""
+    """Build per-tensor descriptor protos from registered tensors.
+
+    With MX_PUBLISH_CHECKSUM (default on), non-empty tensors also carry a
+    ``safe_checksum`` fingerprint of their registered bytes.
+    """
     del global_rank  # unused, kept for caller-symmetry with publish_metadata_and_ready
-    return [
-        p2p_pb2.TensorDescriptor(
+    protos = []
+    for name, t in tensors.items():
+        proto = p2p_pb2.TensorDescriptor(
             name=name,
             addr=t.data_ptr(),
             size=t.numel() * t.element_size(),
             device_id=device_id,
             dtype=str(t.dtype),
         )
-        for name, t in tensors.items()
-    ]
+        # Set only with a value: "" on a proto3 optional field would mark
+        # presence, which a receiver reads as "published but empty".
+        if envs.MX_PUBLISH_CHECKSUM and t.numel() > 0:
+            proto.checksum = safe_checksum(t)
+        protos.append(proto)
+    return protos
 
 
 def publish_metadata_and_ready(

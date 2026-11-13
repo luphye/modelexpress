@@ -287,6 +287,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # ── NIXL / transport ───────────────────────────────────────────────────
     "MX_NIXL_BACKEND": lambda: os.environ.get("MX_NIXL_BACKEND", "UCX").strip().upper(),
+    # Publish a per-tensor safe_checksum on every TensorDescriptor.
+    "MX_PUBLISH_CHECKSUM": lambda: _env_bool("MX_PUBLISH_CHECKSUM", True),
+    # After an RDMA receive, recompute checksums and compare; a mismatch
+    # fails the transfer and names the tensors. No digests -> warn + skip.
+    "MX_VERIFY_CHECKSUM": lambda: _env_bool("MX_VERIFY_CHECKSUM", True),
     "MX_NIXL_METADATA_TIMEOUT": lambda: _env_positive_float(
         "MX_NIXL_METADATA_TIMEOUT", 120.0
     ),

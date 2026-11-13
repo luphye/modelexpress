@@ -1651,6 +1651,14 @@ class TestNixlTransferManagerAppend:
         assert [d.name for d in mgr.tensor_descriptors] == ["target.w"]
 
 
+@pytest.fixture(autouse=True)
+def _pin_publish_checksum_off(monkeypatch):
+    """Manifest tests below feed MagicMock tensors, which cannot be
+    fingerprinted; they test plumbing, not digests (same treatment
+    MX_POOL_REG's default flip gave mock-tensor tests)."""
+    monkeypatch.setenv("MX_PUBLISH_CHECKSUM", "0")
+
+
 class TestExtendPublishedTensors:
     @staticmethod
     def _tensors(prefix):

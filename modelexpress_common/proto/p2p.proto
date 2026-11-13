@@ -139,6 +139,12 @@ message TensorDescriptor {
 
   // Data type (e.g., "float16", "bfloat16")
   string dtype = 5;
+
+  // Position-sensitive fingerprint of the published bytes (safe_checksum),
+  // default-on via MX_PUBLISH_CHECKSUM. Absence means "not published",
+  // never "verified". The P2P worker-to-worker manifest path carries it
+  // verbatim; a central server built before this field strips it.
+  optional string checksum = 6;
 }
 
 // Small discovery summary for file-backed artifact sources. This does not carry

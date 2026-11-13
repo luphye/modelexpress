@@ -762,6 +762,10 @@ class RdmaStrategy(LoadStrategy):
                         size=t.size,
                         device_id=t.device_id,
                         dtype=t.dtype,
+                        # getattr, not attribute access: manifest entries are
+                        # protos from GetTensorManifest, but tests and callers
+                        # mock them with plain objects predating the field.
+                        checksum=getattr(t, "checksum", ""),
                     )
                     for t in tensor_protos
                 ]
@@ -773,6 +777,7 @@ class RdmaStrategy(LoadStrategy):
                         size=t.size,
                         device_id=t.device_id,
                         dtype=t.dtype,
+                        checksum=getattr(t, "checksum", ""),
                     )
                     for t in worker_tensor_descriptors(source_worker)
                 ]
